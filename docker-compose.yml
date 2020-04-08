@@ -1,0 +1,90 @@
+version: "3.6"
+
+volumes:
+  #persistent volume for share auto generated http-client-files between mta-server and mta-http
+  mta-http-client-files:
+
+  #persistent volume for mta-mysql service
+  mta-db:
+
+services:
+  mta-server:
+    # customize container name
+    container_name: server
+
+    # select mta-server image version
+    image: devzolo/mta-server:latest
+
+    restart: unless-stopped
+
+    # enable stdin
+    stdin_open: true
+
+    # enable tty
+    tty: true
+
+    # command options:
+    #  -s                   Run server in silent mode
+    #  -d                   Run server daemonized
+    #  -f                   Run server with a standard console
+    #  -x                   Disable simplified crash reports (To allow core dumps)
+    #  -D [PATH]            Use as base directory
+    #  --config [FILE]      Alternate mtaserver.conf file
+    #  --ip [ADDR]          Set IP address
+    #  --maxplayers [max]   Set maxplayers
+    #  --novoice            Disable voice communication
+    command: --config config/mtaserver.conf.xml
+
+    ports:
+      # customize ports at ".env" file
+      - ${SERVER_PORT}:22003/udp
+      - ${SERVER_HTTP_PORT}:22005/tcp
+      - ${SERVER_ASE_PORT}:22126/udp
+
+    volumes:
+      # create local config folder to store a custom "config/mtaserver.conf.xml" and "config/acl.xml" pointed in <acl>config/acl.xml</acl>
+      - ./server/config/:/app/mods/deathmatch/config
+      # create local folder server/resources to build custom resources at resources/[custom]
+      - ./server/resources/:/app/mods/deathmatch/resources/[custom]
+      # create http-client-files inside mta-http-client-files volume
+      - mta-http-client-files:/app/mods/deathmatch/resource-cache/http-client-files/
+
+    links:
+      - mta-mysql:db
+
+    depends_on:
+      - mta-mysql
+
+  mta-http:
+    container_name: http
+    image: php:7.2-apache
+    restart: unless-stopped
+    volumes:
+      # create local folder ./server/web pointed to /var/www/html/
+      - ./server/web/:/var/www/html/
+      # use generated mta-http-client-files from mta-server
+      - mta-http-client-files:/usr/local/apache2/htdocs/http-client-files/
+    ports:
+      - ${SERVER_CACHE_PORT}:80/tcp
+
+  mta-mysql:
+    container_name: mysql
+    image: mysql:5.7.29
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8 --collation-server=utf8_general_ci
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - ${MYSQL_PORT}:3306/tcp
+    volumes:
+      - mta-db:/var/lib/mysql
+
+  mta-adminer:
+    container_name: adminer
+    image: adminer:latest
+    restart: unless-stopped
+    links:
+      - mta-mysql:db
+    ports:
+      - ${ADMINER_PORT}:8080/tcp
