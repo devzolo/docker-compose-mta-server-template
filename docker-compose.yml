@@ -88,3 +88,16 @@ services:
       - mta-mysql:db
     ports:
       - ${ADMINER_PORT}:8080/tcp
+
+  mta-editor:
+    container_name: editor
+    image: devzolo/theia:latest
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - username=${EDITOR_USER}
+      - password=${EDITOR_PASSWORD}
+    volumes:
+      - ./:/home/project/
+    ports:
+      - ${EDITOR_PORT}:5050
